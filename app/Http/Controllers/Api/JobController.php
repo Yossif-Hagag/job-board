@@ -14,11 +14,8 @@ class JobController extends Controller
         $filter = $request->query('filter');
         $query = Job::query()->with(['languages', 'locations', 'categories', 'attributeValues.attribute']);
         $jobs = (new JobFilterService($query, $filter))->apply()->get();
-
-        if ($request->wantsJson()) {
-            return response()->json($jobs);
-        }
-
-        return view('jobs.index', compact('jobs'));
+    
+        return response()->json($jobs);
     }
+    
 }

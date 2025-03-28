@@ -19,20 +19,56 @@ class JobFilterService
     protected function applyCondition(array $cond, string $boolean = 'and', $query = null)
     {
         $query = $query ?: $this->query;
-
+    
         if ($cond['target'] === 'field') {
-            $query->where($cond['key'], $cond['operator'], $cond['value'], $boolean);
+            $relationMap = [
+                'location_id' => 'locations',
+                'category_id' => 'categories',
+                'language_id' => 'languages',
+            ];
+    
+            if (array_key_exists($cond['key'], $relationMap)) {
+                $relation = $relationMap[$cond['key']];
+                if ($boolean === 'or') {
+                    $query->orWhereHas($relation, function ($q) use ($cond) {
+                        $table = $q->getModel()->getTable();
+                        $q->where("{$table}.id", $cond['operator'], $cond['value']);
+                    });
+                } else {
+                    $query->whereHas($relation, function ($q) use ($cond) {
+                        $table = $q->getModel()->getTable();
+                        $q->where("{$table}.id", $cond['operator'], $cond['value']);
+                    });
+                }
+            } else {
+                if ($boolean === 'or') {
+                    $query->orWhere($cond['key'], $cond['operator'], $cond['value']);
+                } else {
+                    $query->where($cond['key'], $cond['operator'], $cond['value']);
+                }
+            }
         }
-
+    
         if ($cond['target'] === 'attribute') {
-            $query->whereHas('attributeValues', function ($q) use ($cond) {
-                $q->whereHas('attribute', function ($q2) use ($cond) {
-                    $q2->where('name', $cond['key']);
-                })->where('value', $cond['operator'], $cond['value']);
-            }, null, $boolean);
+            if ($boolean === 'or') {
+                $query->orWhereHas('attributeValues', function ($q) use ($cond) {
+                    $q->whereHas('attribute', function ($q2) use ($cond) {
+                        $q2->where('name', $cond['key']);
+                    })->where('value', $cond['operator'], $cond['value']);
+                });
+            } else {
+                $query->whereHas('attributeValues', function ($q) use ($cond) {
+                    $q->whereHas('attribute', function ($q2) use ($cond) {
+                        $q2->where('name', $cond['key']);
+                    })->where('value', $cond['operator'], $cond['value']);
+                });
+            }
         }
+        
+         
     }
-
+    
+    
 
     public function apply(): Builder
     {
@@ -56,15 +92,13 @@ class JobFilterService
             }
         }
 
+        
         return $this->query;
     }
-
-
 
     protected function parseFilter(string $filter): array
     {
         $groups = explode(' AND ', $filter);
-
         $conditions = [];
 
         foreach ($groups as $group) {
@@ -75,10 +109,19 @@ class JobFilterService
                     'conditions' => array_map([$this, 'parseCondition'], $subConditions)
                 ];
             } else {
-                $conditions[] = [
-                    'type' => 'and',
-                    'conditions' => [$this->parseCondition($group)]
-                ];
+                // check if multiple ANDs without OR in a single string
+                $andConditions = explode('&&', $group); // optional support for && if needed
+                if (count($andConditions) > 1) {
+                    $conditions[] = [
+                        'type' => 'and',
+                        'conditions' => array_map([$this, 'parseCondition'], $andConditions)
+                    ];
+                } else {
+                    $conditions[] = [
+                        'type' => 'and',
+                        'conditions' => [$this->parseCondition($group)]
+                    ];
+                }
             }
         }
 
@@ -88,26 +131,30 @@ class JobFilterService
     protected function parseCondition(string $cond): array
     {
         $cond = trim($cond);
-
+        $isAttribute = false;
+    
         if (Str::startsWith($cond, 'attribute:')) {
+            $isAttribute = true;
             $cond = Str::replaceFirst('attribute:', '', $cond);
-            preg_match('/(.+?)(=|!=|>=|<=|>|<)(.+)/', $cond, $matches);
-
+        }
+    
+        preg_match('/(.+?)(=|!=|>=|<=|>|<)(.+)/', $cond, $matches);
+    
+        if (count($matches) !== 4) {
             return [
-                'target' => 'attribute',
-                'key' => trim($matches[1]),
-                'operator' => trim($matches[2]),
-                'value' => trim($matches[3]),
+                'target' => 'field',
+                'key' => '',
+                'operator' => '=',
+                'value' => '',
             ];
         }
-
-        preg_match('/(.+?)(=|!=|>=|<=|>|<)(.+)/', $cond, $matches);
-
+    
         return [
-            'target' => 'field',
+            'target' => $isAttribute ? 'attribute' : 'field',
             'key' => trim($matches[1]),
             'operator' => trim($matches[2]),
             'value' => trim($matches[3]),
         ];
     }
+    
 }

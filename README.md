@@ -1,4 +1,4 @@
-# Laravel-Backend-API-Development-for-E-Commerce-Application
+# Laravel-Job-Board
 
 ## Prerequisites
 > This Project Required Composer To Be Installed
@@ -6,7 +6,7 @@
 - [Composer](https://getcomposer.org/)
 
 ## Online API Docs
-[Postman API Docs](https://documenter.getpostman.com/view/17493797/2sA3kd9HRh)
+[Postman API Docs](https://documenter.getpostman.com/view/17493797/2sB2cPhQ6R)
 
 ## Installation
 
